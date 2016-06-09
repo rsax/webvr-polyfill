@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<title>Web VR Polyfill - basic example</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<style>
+html, body {
+  width: 100%;
+  height: 100%;
+  background-color: #000;
+  color: #fff;
+  margin: 0px;
+  padding: 0;
+  overflow: hidden;
+}
+
+canvas {
+  position: fixed;
+  top: 0;
+}
+
+#buttons {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 1;
+  background: white;
+}
+</style>
+</head>
+
+<body>
+
+  <div id="buttons">
+    <button id="fullscreen">Fullscreen</button>
+    <button id="vr">VR (WebVR/Mobile only)</button>
+    <button id="reset">Reset</button>
+  </div>
+
+</body>
+
+<script>
+WebVRConfig = {
+  BUFFER_SCALE: 1.0,
+};
+
+document.addEventListener('touchmove', function(e) {
+  e.preventDefault();
+});
+</script>
+
+<!-- three.js library -->
+<script src="node_modules/three/three.js"></script>
+
+<!-- VRControls.js applies the WebVR transformations to a three.js camera object. -->
+<script src="node_modules/three/examples/js/controls/VRControls.js"></script>
+
+<script src="node_modules/three/examples/js/controls/OrbitControls.js"></script>
+
+<!-- VREffect.js handles stereo camera setup and rendering.  -->
+<script src="node_modules/three/examples/js/effects/VREffect.js"></script>
+
+<!-- A polyfill for the WebVR API.  -->
+<script src="../../build/webvr-polyfill.js"></script>
+
+
+<script>
+// Setup three.js WebGL renderer. Note: Antialiasing is a big performance hit.
+// Only enable it if you actually need to.
+var renderer = new THREE.WebGLRenderer({antialias: false});
+renderer.setPixelRatio(Math.floor(window.devicePixelRatio));
+
+// Append the canvas element created by the renderer to document body element.
+document.body.appendChild(renderer.domElement);
+
+// Create a three.js scene.
+var scene = new THREE.Scene();
+
+// Create a three.js camera.
+var camera = new THREE.PerspectiveCamera(70.2, window.innerWidth / window.innerHeight, 1, 300);
+
+camera.position.set(0,0,0);
+
+// Apply VR headset positional data to camera.
+var controls = new THREE.VRControls(camera);
+// controls.addEventListener( 'change', render );
+
+/*
+var controls = new THREE.OrbitControls( camera, renderer.domElement );
+controls.enableDamping = true;
+controls.dampingFactor = 0.25;
+controls.enableZoom = false;
+*/
+
+// Apply VR stereo rendering to renderer.
+
+
+var effect = new THREE.VREffect(renderer);
+effect.setSize(window.innerWidth, window.innerHeight);
+
+
+// Add a repeating grid as a skybox.
+var boxWidth = 5;
+var loader = new THREE.TextureLoader();
+loader.load('img/foto-2.jpg', onTextureLoaded);
+
+// Get the VRDisplay and save it for later.
+var vrDisplay = null;
+navigator.getVRDisplays().then(function(displays) {
+  if (displays.length > 0) {
+    vrDisplay = displays[0];
+  }
+});
+
+function onTextureLoaded(texture) {
+
+  /*
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(boxWidth, boxWidth);
+  */
+ texture.minFilter = THREE.LinearFilter;
+ texture.mapping = THREE.UVMapping;
+ 
+  /*
+    // Video Texture
+    http://threejs.org/examples/webgl_materials_texture_filters.html
+    
+    // Panorama Product
+    http://photo-sphere-viewer.js.org/
+
+    // 
+    http://www.webdesignermag.co.uk/create-virtual-reality-panoramas-with-three-js/
+
+    // Panorama 1
+    http://threejs.org/examples/webgl_panorama_equirectangular.html
+
+    // Panorama 2
+    http://threejs.org/examples/css3d_panorama.html
+
+    // Panorama 3
+
+    // Tempalting
+    http://olado.github.io/doT/
+
+    // D.Js
+    http://malko.github.io/D.js/
+
+    // Implement damping (smoth movements camera)
+    http://threejs.org/examples/misc_controls_orbit.html
+   */
+ 
+  var geometry = new THREE.SphereGeometry(200, 32, 32);
+  var material = new THREE.MeshBasicMaterial({
+    map: texture,
+    overdraw: true
+    /*,
+    color: 0x01BE00,
+    side: THREE.BackSide
+    */
+  });
+
+  var skybox = new THREE.Mesh(geometry, material);
+  skybox.scale.x = -1;
+  scene.add(skybox);
+
+}
+
+// Request animation frame loop function
+var lastRender = 0;
+
+function animate(timestamp) {
+  // Keep looping.
+  requestAnimationFrame(animate);
+
+  var delta = Math.min(timestamp - lastRender, 500);
+  
+  lastRender = timestamp;
+
+  // Update VR headset position and apply to camera.
+  controls.update();
+
+  // Render the scene.
+  effect.render(scene, camera);
+
+  //render();
+}
+
+function render() {
+  renderer.render(scene, camera);
+}
+
+function onResize() {
+  console.log('Resizing to %s x %s.', window.innerWidth, window.innerHeight);
+  effect.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+}
+
+function onVRDisplayPresentChange() {
+  console.log('onVRDisplayPresentChange');
+  onResize();
+}
+
+// Kick off animation loop.
+requestAnimationFrame(animate);
+
+// Resize the WebGL canvas when we resize and also when we change modes.
+window.addEventListener('resize', onResize);
+window.addEventListener('vrdisplaypresentchange', onVRDisplayPresentChange);
+
+// Button click handlers.
+document.querySelector('button#fullscreen').addEventListener('click', function() {
+  enterFullscreen(renderer.domElement);
+});
+document.querySelector('button#vr').addEventListener('click', function() {
+  vrDisplay.requestPresent([{source: renderer.domElement}]);
+});
+document.querySelector('button#reset').addEventListener('click', function() {
+  vrDisplay.resetPose();
+});
+
+function enterFullscreen (el) {
+  if (el.requestFullscreen) {
+    el.requestFullscreen();
+  } else if (el.mozRequestFullScreen) {
+    el.mozRequestFullScreen();
+  } else if (el.webkitRequestFullscreen) {
+    el.webkitRequestFullscreen();
+  } else if (el.msRequestFullscreen) {
+    el.msRequestFullscreen();
+  }
+}
+
+</script>
+
+</html>
